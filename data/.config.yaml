@@ -1,0 +1,9 @@
+server:
+  ip: 0.0.0.0
+  advertise_ip: 192.168.0.102
+  port: 9000
+  http_port: 9003
+  websocket: ""
+  mqtt_gateway: 192.168.0.102:1883
+  udp_gateway: 192.168.0.102:8884
+  mqtt_signature_key: AxmN9pQr7K

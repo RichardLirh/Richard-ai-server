@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+.venv/
+venv/
+env/
+
+.env
+.env.*
+
+tmp/
+*.log
+__tmp_start.log
+run_server.log
+uploadfile/
+
+# Local MySQL runtime data can include socket files unsupported on Windows Git.
+mysql/data/
+
+.DS_Store
+Thumbs.db
+
+*.pt
+*.pt.bak
+
+mysql
