@@ -16,19 +16,60 @@ function Add-PathPrefix([string]$PathToAdd) {
     $env:PATH = "$PathToAdd;$env:PATH"
 }
 
-function Resolve-Python([string]$PreferredPython) {
-    $candidates = @()
-    if ($PreferredPython) { $candidates += $PreferredPython }
-    $candidates += @(
-        "C:\Users\under\.conda\envs\xiaozhi-esp32-server\python.exe",
-        "C:\Users\under\.conda\envs\xiaozhi310\python.exe",
-        "C:\Users\under\.conda\envs\richard-esp32-server\python.exe"
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) { return $candidate }
+function Test-PythonCandidate([string]$PythonExe) {
+    if (-not $PythonExe) { return $false }
+    if (-not (Test-Path $PythonExe)) { return $false }
+
+    try {
+        & $PythonExe -c "import edge_tts, websockets, aiohttp; print('ok')" 1>$null 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
     }
+}
+
+function Resolve-Python([string]$PreferredPython) {
+    $candidates = New-Object System.Collections.Generic.List[string]
+    $candidateSet = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+
+    $addCandidate = {
+        param([string]$PathValue)
+        if ([string]::IsNullOrWhiteSpace($PathValue)) { return }
+        $normalized = $PathValue.Trim()
+        if (-not $normalized) { return }
+        if ($candidateSet.Add($normalized)) {
+            $candidates.Add($normalized) | Out-Null
+        }
+    }
+
+    if ($PreferredPython) { & $addCandidate $PreferredPython }
+    & $addCandidate "C:\Users\under\.conda\envs\richard-esp32-server\python.exe"
+    & $addCandidate "C:\Users\under\.conda\envs\richard310\python.exe"
+
+    $condaRoot = "C:\Users\under\.conda\envs"
+    if (Test-Path $condaRoot) {
+        foreach ($py in (Get-ChildItem -Path $condaRoot -Directory -ErrorAction SilentlyContinue |
+                ForEach-Object { Join-Path $_.FullName "python.exe" })) {
+            if (-not (Test-Path $py)) { continue }
+            & $addCandidate $py
+        }
+    }
+
     $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($pythonCmd) { return $pythonCmd.Source }
+    if ($pythonCmd) { & $addCandidate $pythonCmd.Source }
+
+    foreach ($candidate in $candidates) {
+        if (Test-PythonCandidate -PythonExe $candidate) {
+            return $candidate
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
     return $null
 }
 
@@ -173,13 +214,13 @@ if (-not $CheckOnly) {
     }
 }
 
-& $pythonExe -c "import ctypes.util, shutil, sys; print('python=', sys.executable); print('ffmpeg=', shutil.which('ffmpeg')); print('opus=', ctypes.util.find_library('opus')); sys.exit(0)"
+& $pythonExe -c "import ctypes.util, shutil, sys; ffmpeg = shutil.which('ffmpeg'); opus = ctypes.util.find_library('opus'); sys.exit(0 if ffmpeg and opus else 1)"
 if ($LASTEXITCODE -ne 0) {
     throw "Runtime self-check failed."
 }
 
 if ($CheckOnly) {
-    Write-Host "Check passed. root=$projectRoot python=$pythonExe entry=$entryPath type=$entryType"
+    Write-Host "Check passed. root=$projectRoot entry=$entryPath type=$entryType"
     exit 0
 }
 

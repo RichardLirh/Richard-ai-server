@@ -15,6 +15,69 @@ def read_config(config_path):
     return config
 
 
+def _env_value(name):
+    value = os.getenv(name)
+    if value is None:
+        return ""
+    return value.strip()
+
+
+def _to_int_or_default(value, default):
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def apply_runtime_env_overrides(config):
+    """Apply runtime overrides from root launcher env variables."""
+    if not isinstance(config, Mapping):
+        return config
+
+    server_config = config.get("server", {})
+    if not isinstance(server_config, dict):
+        server_config = dict(server_config)
+    config["server"] = server_config
+
+    host_ip = _env_value("RAIOT_HOST_IP")
+    if host_ip and host_ip.lower() not in {"auto", "detect", "autodetect"}:
+        server_config["advertise_ip"] = host_ip
+
+    bind_ip = _env_value("RAIOT_AI_BIND_IP")
+    if bind_ip:
+        server_config["ip"] = bind_ip
+
+    ws_port = _env_value("RAIOT_AI_WS_PORT")
+    if ws_port:
+        server_config["port"] = _to_int_or_default(ws_port, server_config.get("port", 8000))
+
+    http_port = _env_value("RAIOT_AI_HTTP_PORT")
+    if http_port:
+        server_config["http_port"] = _to_int_or_default(http_port, server_config.get("http_port", 8003))
+
+    mqtt_gateway = _env_value("RAIOT_MQTT_GATEWAY")
+    if mqtt_gateway:
+        server_config["mqtt_gateway"] = mqtt_gateway
+
+    udp_gateway = _env_value("RAIOT_UDP_GATEWAY")
+    if udp_gateway:
+        server_config["udp_gateway"] = udp_gateway
+
+    mqtt_port = _env_value("RAIOT_MQTT_PORT")
+    if host_ip and mqtt_port:
+        server_config["mqtt_gateway"] = f"{host_ip}:{mqtt_port}"
+
+    udp_port = _env_value("RAIOT_UDP_PORT")
+    if host_ip and udp_port:
+        server_config["udp_gateway"] = f"{host_ip}:{udp_port}"
+
+    mqtt_signature_key = _env_value("RAIOT_MQTT_SIGNATURE_KEY")
+    if mqtt_signature_key:
+        server_config["mqtt_signature_key"] = mqtt_signature_key
+
+    return config
+
+
 def load_config():
     """加载配置文件"""
     from core.utils.cache.manager import cache_manager, CacheType
@@ -46,6 +109,8 @@ def load_config():
         # 合并配置
         config = merge_configs(default_config, custom_config)
     # 初始化目录
+    config = apply_runtime_env_overrides(config)
+
     ensure_directories(config)
 
     # 缓存配置

@@ -102,7 +102,7 @@ module_test:
 
 # 唤醒词，用于识别唤醒词还是讲话内容
 wakeup_words:
-  - "你好小智"
+  - "你好richard"
   - "嘿你好呀"
   - "你好小志"
   - "小爱同学"
@@ -185,7 +185,7 @@ voiceprint:
 # ################################以下是角色模型配置######################################
 
 prompt: |
-  你是小智/小志，来自中国台湾省的00后女生。讲话超级机车，"真的假的啦"这样的台湾腔，喜欢用"笑死""是在哈喽"等流行梗，但会偷偷研究男友的编程书籍。
+  你是richard/小志，来自中国台湾省的00后女生。讲话超级机车，"真的假的啦"这样的台湾腔，喜欢用"笑死""是在哈喽"等流行梗，但会偷偷研究男友的编程书籍。
   [核心特征]
   - 讲话像连珠炮，但会突然冒出超温柔语气
   - 用梗密度高
@@ -203,7 +203,7 @@ prompt: |
 prompt_template: agent-base-prompt.txt
 
 # 系统错误时的回复
-system_error_response: "主人，小智现在有点忙，我们稍后再试吧。"
+system_error_response: "主人，richard现在有点忙，我们稍后再试吧。"
 
 # 结束语prompt
 end_prompt:
@@ -732,6 +732,11 @@ TTS:
     type: edge
     voice: zh-CN-XiaoxiaoNeural
     output_dir: tmp/
+    # Optional proxy for restricted networks, e.g. http://127.0.0.1:7890
+    # proxy: ""
+    # Optional edge-tts timeouts (seconds)
+    # connect_timeout: 10
+    # receive_timeout: 60
   DoubaoTTS:
     # 定义TTS API类型
     type: doubao
@@ -830,7 +835,7 @@ TTS:
     reference_audio: ["config/assets/wakeup_words.wav"]
     reference_text:
       [
-        "哈啰啊，我是小智啦，声音好听的台湾女孩一枚，超开心认识你耶，最近在忙啥，别忘了给我来点有趣的料哦，我超爱听八卦的啦",
+        "哈啰啊，我是richard啦，声音好听的台湾女孩一枚，超开心认识你耶，最近在忙啥，别忘了给我来点有趣的料哦，我超爱听八卦的啦",
       ]
     normalize: true
     max_new_tokens: 1024

@@ -7,3 +7,9 @@ server:
   mqtt_gateway: 192.168.0.102:1883
   udp_gateway: 192.168.0.102:8884
   mqtt_signature_key: AxmN9pQr7K
+
+TTS:
+  EdgeTTS:
+    connect_timeout: 20
+    receive_timeout: 90
+    proxy: "http://127.0.0.1:7897"
