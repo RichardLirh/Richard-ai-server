@@ -1,0 +1,10 @@
+.git
+.env*
+data
+models
+tmp
+logs
+__pycache__
+*.pyc
+.venv*
+test
