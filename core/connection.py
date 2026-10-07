@@ -184,7 +184,8 @@ class ConnectionHandler:
             else:
                 self.client_ip = ws.remote_address[0]
             self.logger.bind(tag=TAG).info(
-                f"{self.client_ip} conn - Headers: {self.headers}"
+                f"{self.client_ip} conn - device_id={self.headers.get('device-id')} "
+                f"protocol_version={self.headers.get('protocol-version')}"
             )
 
             self.device_id = self.headers.get("device-id", None)
