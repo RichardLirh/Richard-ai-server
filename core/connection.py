@@ -81,6 +81,8 @@ class ConnectionHandler:
         self.websocket: websockets.ServerConnection | None = None
         self.headers = None
         self.device_id = None
+        self.voice_mail = None
+        self.voice_mail_authenticated = False
         self.client_ip = None
         self.prompt = None
         self.welcome_msg = None
@@ -322,7 +324,13 @@ class ConnectionHandler:
                     return
 
             # 不需要头部处理或没有头部时，直接处理原始消息
-            self.asr_audio_queue.put(message)
+            self._queue_asr_audio(message)
+
+    def _queue_asr_audio(self, audio):
+        if self.voice_mail:
+            self.asr_audio_queue.put((audio, time.time(), time.monotonic()))
+        else:
+            self.asr_audio_queue.put(audio)
 
     async def _process_mqtt_audio_message(self, message):
         """
@@ -349,7 +357,7 @@ class ConnectionHandler:
             elif len(message) > 16:
                 # 没有指定长度或长度无效，去掉头部后处理剩余数据
                 audio_data = message[16:]
-                self.asr_audio_queue.put(audio_data)
+                self._queue_asr_audio(audio_data)
                 return True
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"解析WebSocket音频包失败: {e}")
@@ -367,7 +375,7 @@ class ConnectionHandler:
 
         # 如果时间戳是递增的，直接处理
         if timestamp >= self.last_processed_timestamp:
-            self.asr_audio_queue.put(audio_data)
+            self._queue_asr_audio(audio_data)
             self.last_processed_timestamp = timestamp
 
             # 处理缓冲区中的后续包
@@ -377,7 +385,7 @@ class ConnectionHandler:
                 for ts in sorted(self.audio_timestamp_buffer.keys()):
                     if ts > self.last_processed_timestamp:
                         buffered_audio = self.audio_timestamp_buffer.pop(ts)
-                        self.asr_audio_queue.put(buffered_audio)
+                        self._queue_asr_audio(buffered_audio)
                         self.last_processed_timestamp = ts
                         processed_any = True
                         break
@@ -386,7 +394,7 @@ class ConnectionHandler:
             if len(self.audio_timestamp_buffer) < self.max_timestamp_buffer_size:
                 self.audio_timestamp_buffer[timestamp] = audio_data
             else:
-                self.asr_audio_queue.put(audio_data)
+                self._queue_asr_audio(audio_data)
 
     async def handle_restart(self, message):
         """处理服务器重启请求"""
@@ -560,6 +568,8 @@ class ConnectionHandler:
         try:
             # 异步获取差异化配置
             await self._initialize_private_config_async()
+            from core.voice_mail.bridge import attach_bridge
+            await attach_bridge(self)
             # 在线程池中初始化组件
             self.executor.submit(self._initialize_components)
         except Exception as e:
@@ -742,6 +752,16 @@ class ConnectionHandler:
                 self.logger.bind(tag=TAG).info("使用主LLM作为意图识别模型")
 
     def _initialize_intent(self):
+        if self.voice_mail:
+            # A per-connection merge preserves configured functions; no DB or
+            # shared provider configuration is changed for other devices.
+            from core.providers.intent.function_call.function_call import IntentProvider
+            current = self.config.get("selected_module", {}).get("Intent")
+            existing = self.config.get("Intent", {}).get(current, {})
+            merged = dict(existing, type="function_call")
+            self.config.setdefault("Intent", {})["VoiceMail_function_call"] = merged
+            self.config.setdefault("selected_module", {})["Intent"] = "VoiceMail_function_call"
+            self.intent = IntentProvider(merged)
         if self.intent is None:
             return
         self.intent_type = self.config["Intent"][
@@ -802,6 +822,8 @@ class ConnectionHandler:
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
             self.sentence_id = str(uuid.uuid4().hex)
+            if self.voice_mail:
+                self.voice_mail.normal_started(self.sentence_id)
             self.dialogue.put(Message(role="user", content=query))
             self.tts.tts_text_queue.put(
                 TTSMessageDTO(
@@ -1120,6 +1142,8 @@ class ConnectionHandler:
     async def close(self, ws=None):
         """资源清理方法"""
         try:
+            if self.voice_mail:
+                await self.voice_mail.close()
             # 清理音频缓冲区
             if hasattr(self, "audio_buffer"):
                 self.audio_buffer.clear()

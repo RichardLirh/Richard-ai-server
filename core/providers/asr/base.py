@@ -45,8 +45,11 @@ class ASRProviderBase(ABC):
         while not conn.stop_event.is_set():
             try:
                 message = conn.asr_audio_queue.get(timeout=1)
+                received_at = received_monotonic = None
+                if isinstance(message, tuple):
+                    message, received_at, received_monotonic = message
                 future = asyncio.run_coroutine_threadsafe(
-                    handleAudioMessage(conn, message),
+                    handleAudioMessage(conn, message, received_at, received_monotonic),
                     conn.loop,
                 )
                 future.result()
@@ -75,13 +78,14 @@ class ASRProviderBase(ABC):
             # 自动模式下通过VAD检测到语音停止时触发识别
             if conn.asr.interface_type != InterfaceType.STREAM and conn.client_voice_stop:
                 asr_audio_task = conn.asr_audio.copy()
+                capture = conn.voice_mail.take_capture() if getattr(conn, "voice_mail", None) else None
                 conn.reset_audio_states()
 
                 if len(asr_audio_task) > 15:
-                    await self.handle_voice_stop(conn, asr_audio_task)
+                    await self.handle_voice_stop(conn, asr_audio_task, capture=capture)
 
     # 处理语音停止
-    async def handle_voice_stop(self, conn: "ConnectionHandler", asr_audio_task: List[bytes]):
+    async def handle_voice_stop(self, conn: "ConnectionHandler", asr_audio_task: List[bytes], capture=None):
         """并行处理ASR和声纹识别"""
         try:
             total_start_time = time.monotonic()
@@ -169,7 +173,11 @@ class ASRProviderBase(ABC):
 
             if text_len > 0:
                 # 使用自定义模块进行上报
-                await startToChat(conn, enhanced_text)
+                handled = False
+                if getattr(conn, "voice_mail", None):
+                    handled = await conn.voice_mail.accept_microphone_final(enhanced_text, capture)
+                if not handled:
+                    await startToChat(conn, enhanced_text)
                 audio_snapshot = asr_audio_task.copy()
                 enqueue_asr_report(conn, enhanced_text, audio_snapshot)
         except Exception as e:

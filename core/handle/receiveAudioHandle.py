@@ -14,9 +14,11 @@ from core.handle.sendAudioHandle import send_stt_message, SentenceType
 TAG = __name__
 
 
-async def handleAudioMessage(conn: "ConnectionHandler", audio):
+async def handleAudioMessage(conn: "ConnectionHandler", audio, received_at=None, received_monotonic=None):
     # 当前片段是否有人说话
     have_voice = conn.vad.is_vad(conn, audio)
+    if getattr(conn, "voice_mail", None):
+        conn.voice_mail.audio_frame(received_at or time.time(), received_monotonic or time.monotonic(), have_voice)
     # 如果设备刚刚被唤醒，短暂忽略VAD检测
     if hasattr(conn, "just_woken_up") and conn.just_woken_up:
         have_voice = False
@@ -41,6 +43,10 @@ async def resume_vad_detection(conn: "ConnectionHandler"):
 
 
 async def startToChat(conn: "ConnectionHandler", text):
+    # Readback/result audio must not be echoed into a new model turn. Approval
+    # is handled only by accept_microphone_final, never by this shared entry.
+    if getattr(conn, "voice_mail", None) and conn.voice_mail.speaking_id:
+        return
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     language_tag = None

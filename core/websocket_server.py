@@ -123,6 +123,13 @@ class WebSocketServer:
             self._intent,
             self,  # 传入server实例
         )
+        # Voice effects require a valid signed device identity even when ordinary
+        # chat authentication is disabled or a chat-only whitelist bypass exists.
+        voice_headers = dict(websocket.request.headers)
+        voice_auth = voice_headers.get("authorization", "")
+        handler.voice_mail_authenticated = voice_auth.startswith("Bearer ") and self.auth.verify_token(
+            voice_auth[7:], voice_headers.get("client-id"), voice_headers.get("device-id")
+        )
         try:
             await handler.handle_connection(websocket)
         except Exception as e:

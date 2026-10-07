@@ -7,6 +7,8 @@ TAG = __name__
 
 
 async def handleAbortMessage(conn: "ConnectionHandler"):
+    if getattr(conn, "voice_mail", None):
+        conn.voice_mail.interrupt()
     conn.logger.bind(tag=TAG).info("Abort message received")
     # 设置成打断状态，会自动打断llm、tts任务
     conn.client_abort = True
