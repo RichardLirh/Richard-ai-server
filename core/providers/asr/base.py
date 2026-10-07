@@ -88,6 +88,12 @@ class ASRProviderBase(ABC):
     async def handle_voice_stop(self, conn: "ConnectionHandler", asr_audio_task: List[bytes], capture=None):
         """并行处理ASR和声纹识别"""
         try:
+            # Stream ASR providers call this method after their own stop packet
+            # handling and do not have the non-stream caller's capture object.
+            # Take it here so genuine microphone confirmation is checked with
+            # the same generation/tail-guard proof on both paths.
+            if capture is None and getattr(conn, "voice_mail", None):
+                capture = conn.voice_mail.take_capture()
             total_start_time = time.monotonic()
 
             # 准备音频数据
